@@ -3,20 +3,22 @@ package core
 import (
 	"fmt"
 	"net"
-
-	"github.com/Devansu-Yadav/gopher-indexer/core/util"
 )
 
 func ConnectToServer(server string) (net.Conn, string, error) {
-	conn, err := util.CreateTCPConnection(server)
+	conn, err := CreateTCPConnection(server)
 
 	if err != nil {
-		util.HandleServerConnectionError(err)
+		return nil, "", FetchErrorResponse(ConnectionError, err)
 	}
 
 	fmt.Fprintf(conn, "\r\n")
 
-	response := util.HandleGopherServerResponse(conn)
+	response, responseErr := FetchGopherServerResponse(conn)
+
+	if responseErr != nil {
+		return nil, "", responseErr
+	}
 	return conn, response, nil
 }
 

@@ -1,4 +1,4 @@
-package util
+package core
 
 import (
 	"bufio"
@@ -9,14 +9,14 @@ func CreateTCPConnection(server string) (net.Conn, error) {
 	return net.Dial("tcp", server)
 }
 
-func HandleGopherServerResponse(conn net.Conn) string {
+func FetchGopherServerResponse(conn net.Conn) (string, error) {
 	reader := bufio.NewReader(conn)
 	var response string
 
 	for {
 		line, err := reader.ReadString('\n')
 		if err != nil {
-			HandleServerResponseError(err)
+			return "", FetchErrorResponse(ResponseError, err)
 		}
 
 		response += line
@@ -25,5 +25,5 @@ func HandleGopherServerResponse(conn net.Conn) string {
 			break
 		}
 	}
-	return response
+	return response, nil
 }
