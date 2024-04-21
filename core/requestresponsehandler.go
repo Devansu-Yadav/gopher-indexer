@@ -2,6 +2,7 @@ package core
 
 import (
 	"bufio"
+	"fmt"
 	"net"
 )
 
@@ -26,4 +27,20 @@ func FetchGopherServerResponse(conn net.Conn) (string, error) {
 		}
 	}
 	return response, nil
+}
+
+func FetchDirsAndExternalServerResponses(server, resource string) (net.Conn, string, error) {
+	conn, err := CreateTCPConnection(server)
+	if err != nil {
+		return nil, "", FetchErrorResponse(ConnectionError, err)
+	}
+
+	fmt.Fprintf(conn, "%s\r\n", resource)
+
+	response, responseErr := FetchGopherServerResponse(conn)
+
+	if responseErr != nil {
+		return nil, "", responseErr
+	}
+	return conn, response, nil
 }
