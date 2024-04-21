@@ -4,23 +4,33 @@ import (
 	"bufio"
 	"fmt"
 	"net"
-	"os"
 	"time"
 )
 
 func CreateTCPConnection(server string) (net.Conn, error) {
-	return net.Dial("tcp", server)
+	conn, err := net.Dial("tcp", server)
+	logRequest(server)
+
+	return conn, err
 }
 
 func CreateTCPConnectionWithTimeOut(server string) (net.Conn, error) {
 	conn, err := net.DialTimeout("tcp", server, MaxResponseTimeOut)
+	logRequest(server)
+
 	if err != nil {
 		return nil, err
 	}
 	return conn, nil
 }
 
-func FetchServerResponse(conn net.Conn) (string, error) {
+func FetchServerResponse(conn net.Conn, resource string) (string, error) {
+	if resource != "" {
+		fmt.Fprintf(conn, "%s\r\n", resource)
+	} else {
+		fmt.Fprintf(conn, "\r\n")
+	}
+
 	reader := bufio.NewReader(conn)
 	var response string
 
@@ -30,7 +40,7 @@ func FetchServerResponse(conn net.Conn) (string, error) {
 		line, err := reader.ReadString('\n')
 		if err != nil {
 			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-				fmt.Fprintln(os.Stderr, "Server Response timed out!")
+				logError(ServerResponseTimeOut, resource)
 				break
 			} else {
 				return "", FetchErrorResponse(ResponseError, err)
@@ -53,9 +63,7 @@ func FetchResourcesFromDirectory(server, resource string) (string, error) {
 	}
 	defer conn.Close()
 
-	fmt.Fprintf(conn, "%s\r\n", resource)
-
-	response, responseErr := FetchServerResponse(conn)
+	response, responseErr := FetchServerResponse(conn, resource)
 
 	if responseErr != nil {
 		return "", responseErr
@@ -68,16 +76,14 @@ func FetchResourcesFromExternalServer(server, resource string) (string, error) {
 
 	if err != nil {
 		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-			fmt.Fprintln(os.Stderr, "External server connection timed out!")
+			logError(ExternalServerConnection, resource)
 			return "", nil
 		}
 		return "", FetchErrorResponse(ConnectionError, err)
 	}
 	defer conn.Close()
 
-	fmt.Fprintf(conn, "%s\r\n", resource)
-
-	response, responseErr := FetchServerResponse(conn)
+	response, responseErr := FetchServerResponse(conn, resource)
 
 	if responseErr != nil {
 		return "", responseErr
