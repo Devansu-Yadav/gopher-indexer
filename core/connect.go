@@ -2,26 +2,22 @@ package core
 
 import (
 	"fmt"
-	"net"
 )
 
-func ConnectToServer(server string) (net.Conn, string, error) {
+func ConnectToServer(server string) (string, error) {
 	conn, err := CreateTCPConnection(server)
 
 	if err != nil {
-		return nil, "", FetchErrorResponse(ConnectionError, err)
+		return "", FetchErrorResponse(ConnectionError, err)
 	}
+	defer conn.Close()
 
 	fmt.Fprintf(conn, "\r\n")
 
-	response, responseErr := FetchGopherServerResponse(conn)
+	response, responseErr := FetchServerResponse(conn)
 
 	if responseErr != nil {
-		return nil, "", responseErr
+		return "", responseErr
 	}
-	return conn, response, nil
-}
-
-func CloseConnection(conn net.Conn) {
-	conn.Close()
+	return response, nil
 }

@@ -9,6 +9,7 @@ func FetchFileAttrs(server, resource string) (int, error) {
 	if err != nil {
 		return 0, FetchErrorResponse(ConnectionError, err)
 	}
+	defer conn.Close()
 
 	fmt.Fprintf(conn, "%s\r\n", resource)
 
@@ -21,6 +22,5 @@ func FetchFileAttrs(server, resource string) (int, error) {
 	// Fetch file size
 	fileSize := len(response)
 
-	CloseConnection(conn)
 	return fileSize, nil
 }
