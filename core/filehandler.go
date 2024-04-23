@@ -2,6 +2,8 @@ package core
 
 func FetchFileAttrs(server, resource string) (int, error) {
 	conn, err := CreateTCPConnection(server)
+	logRequest(server + resource)
+
 	if err != nil {
 		return 0, FetchErrorResponse(ConnectionError, err)
 	}

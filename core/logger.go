@@ -13,6 +13,7 @@ const (
 	ReadFileTimeOut
 	ServerResponseTimeOut
 	ExternalServerConnection
+	InvalidReference
 )
 
 func logRequest(request string) {
@@ -29,5 +30,7 @@ func logError(logType LogType, resource string) {
 		fmt.Fprintln(os.Stderr, "Error: Server response timed out - "+resource)
 	case ExternalServerConnection:
 		fmt.Fprintln(os.Stderr, "Error: External server connection timed out - "+resource)
+	case InvalidReference:
+		fmt.Fprintln(os.Stderr, "Error: Invalid Reference to resource - "+resource)
 	}
 }

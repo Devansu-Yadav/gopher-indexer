@@ -9,14 +9,11 @@ import (
 
 func CreateTCPConnection(server string) (net.Conn, error) {
 	conn, err := net.Dial("tcp", server)
-	logRequest(server)
-
 	return conn, err
 }
 
 func CreateTCPConnectionWithTimeOut(server string) (net.Conn, error) {
 	conn, err := net.DialTimeout("tcp", server, MaxResponseTimeOut)
-	logRequest(server)
 
 	if err != nil {
 		return nil, err
@@ -58,6 +55,8 @@ func FetchServerResponse(conn net.Conn, resource string) (string, error) {
 
 func FetchResourcesFromDirectory(server, resource string) (string, error) {
 	conn, err := CreateTCPConnection(server)
+	logRequest(server + resource)
+
 	if err != nil {
 		return "", FetchErrorResponse(ConnectionError, err)
 	}
@@ -71,19 +70,20 @@ func FetchResourcesFromDirectory(server, resource string) (string, error) {
 	return response, nil
 }
 
-func FetchResourcesFromExternalServer(server, resource string) (string, error) {
+func FetchResourcesFromExternalServer(server string) (string, error) {
 	conn, err := CreateTCPConnectionWithTimeOut(server)
+	logRequest(server)
 
 	if err != nil {
 		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-			logError(ExternalServerConnection, resource)
+			logError(ExternalServerConnection, server)
 			return "", nil
 		}
 		return "", FetchErrorResponse(ConnectionError, err)
 	}
 	defer conn.Close()
 
-	response, responseErr := FetchServerResponse(conn, resource)
+	response, responseErr := FetchServerResponse(conn, "")
 
 	if responseErr != nil {
 		return "", responseErr
