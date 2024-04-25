@@ -67,18 +67,35 @@ func ScrapeGopherResponse(serverResourceLink, response string) ([]string, map[st
 	return directories, files, externalServers, invalidReferences
 }
 
-func ScanFilesAndExtServersInDir(server string, files map[string][]string, externalServers []string, serverResources map[string][]string, extServerStatuses map[string]bool) {
+func ScanFilesAndExtServersInDir(server string, files map[string][]string, externalServers []string, serverResources map[string][]string, extServerStatuses map[string]bool, fileSizes map[string][]int, smallestTextFileContents *string) {
 	for fileType, fileList := range files {
 		for _, file := range fileList {
-			size, err := FetchFileAttrs(server, file)
+			contents, size, err, isMalformed := FetchFileAttrs(server, file, fileType)
 			if err != nil {
 				fmt.Fprintln(os.Stderr, ""+err.Error())
+				serverResources["error"] = append(serverResources["error"], server+file)
 				continue
-			} else {
-				serverResources[fileType] = append(serverResources[fileType], file)
+			}
+
+			if isMalformed {
+				serverResources["error"] = append(serverResources["error"], server+file)
 			}
 
 			fmt.Printf("File: %s, Type: %s, Size: %d B\n", file, fileType, size)
+			serverResources[fileType] = append(serverResources[fileType], file)
+
+			// Update the size of the smallest text/binary file found so far
+			if size < fileSizes[fileType][0] {
+				fileSizes[fileType][0] = size
+				if fileType == "text" {
+					*smallestTextFileContents = string(contents)
+				}
+			}
+
+			// Update the size of the largest text/binary file found so far
+			if size > fileSizes[fileType][1] {
+				fileSizes[fileType][1] = size
+			}
 		}
 	}
 
@@ -88,6 +105,7 @@ func ScanFilesAndExtServersInDir(server string, files map[string][]string, exter
 		if extServerErr != nil {
 			fmt.Fprintln(os.Stderr, ""+extServerErr.Error())
 			extServerStatuses[extServer] = false
+			serverResources["error"] = append(serverResources["error"], extServer)
 			continue
 		}
 
@@ -108,49 +126,64 @@ func CrawlGopherServer(server string, initialServerResponse string) {
 	directories, files, externalServers, invalidReferences := ScrapeGopherResponse(server+"/", initialServerResponse)
 
 	visited := make(map[string]bool)
-	serverResources := make(map[string][]string)
+	serverResources := map[string][]string{
+		"error": {},
+	}
+
 	extServerStatuses := make(map[string]bool)
+	fileSizes := map[string][]int{
+		"text":   {MaxFileSize, 0},
+		"binary": {MaxFileSize, 0},
+	}
+	smallestTextFileContents := ""
 
 	// visited the root dir
 	visited["/"] = true
 
 	// Recursively scanning each directory within root directory
 	for _, dir := range directories {
-		ScanDirectories(server, dir, visited, serverResources, extServerStatuses)
+		ScanDirectories(server, dir, visited, serverResources, extServerStatuses, fileSizes, &smallestTextFileContents)
 	}
 
 	// Scan files and references to external servers in root dir
-	ScanFilesAndExtServersInDir(server, files, externalServers, serverResources, extServerStatuses)
+	ScanFilesAndExtServersInDir(server, files, externalServers, serverResources, extServerStatuses, fileSizes, &smallestTextFileContents)
 
 	// Handle invalid references
 	StoreInvalidReferences(invalidReferences, serverResources)
 
 	fmt.Println("\n================= Gopher Server stats =======================")
-	fmt.Println("No of Gopher directories on server: ", len(visited))
+	fmt.Println("a. No of Gopher directories on server: ", len(visited))
 	fmt.Println("List of directories: ")
 	for dir := range visited {
 		fmt.Println(server + dir)
 	}
 
-	fmt.Println("\nTotal no of simple text files: ", len(serverResources["text"]))
+	fmt.Println("\nb. Total no of simple text files: ", len(serverResources["text"]))
 	fmt.Println("List of simple text files(full path): ")
 	for _, file := range serverResources["text"] {
 		fmt.Println(server + file)
 	}
 
-	fmt.Println("\nTotal no of binary files: ", len(serverResources["binary"]))
+	fmt.Println("\nc. Total no of binary files: ", len(serverResources["binary"]))
 	fmt.Println("List of binary files(full path): ")
 	for _, file := range serverResources["binary"] {
 		fmt.Println(server + file)
 	}
 
-	fmt.Println("\nTotal no of unique invalid references: ", len(serverResources["invalid"]))
+	fmt.Println("\nd. The contents of the smallest text file:")
+	fmt.Println(smallestTextFileContents)
+
+	fmt.Printf("\ne. Size of the largest text file: %d B", fileSizes["text"][1])
+	fmt.Printf("\nf. Size of the smallest binary file: %d B", fileSizes["binary"][0])
+	fmt.Printf("\nf. Size of the largest binary file: %d B\n", fileSizes["binary"][1])
+
+	fmt.Println("\ng. Total no of unique invalid references: ", len(serverResources["invalid"]))
 	fmt.Println("List of invalid references(full path): ")
 	for _, ref := range serverResources["invalid"] {
-		fmt.Println(server + ref)
+		fmt.Println(ref)
 	}
 
-	fmt.Println("\nList of external servers: ")
+	fmt.Println("\nh. List of external servers: ")
 	for extServer, status := range extServerStatuses {
 		upOrDown := "down"
 		if status {
@@ -158,9 +191,14 @@ func CrawlGopherServer(server string, initialServerResponse string) {
 		}
 		fmt.Printf("External server: %s is %s\n", extServer, upOrDown)
 	}
+
+	fmt.Println("\ni. List of references with issues/errors(timeout, malformed or large file size): ")
+	for _, errorRef := range serverResources["error"] {
+		fmt.Println(errorRef)
+	}
 }
 
-func ScanDirectories(server, directory string, visited map[string]bool, serverResources map[string][]string, extServerStatuses map[string]bool) {
+func ScanDirectories(server, directory string, visited map[string]bool, serverResources map[string][]string, extServerStatuses map[string]bool, fileSizes map[string][]int, smallestTextFileContents *string) {
 	if visited[directory] {
 		return
 	}
@@ -176,11 +214,11 @@ func ScanDirectories(server, directory string, visited map[string]bool, serverRe
 	directories, files, externalServers, invalidReferences := ScrapeGopherResponse(server+directory, response)
 	// Recursively scanning current dir
 	for _, dir := range directories {
-		ScanDirectories(server, dir, visited, serverResources, extServerStatuses)
+		ScanDirectories(server, dir, visited, serverResources, extServerStatuses, fileSizes, smallestTextFileContents)
 	}
 
 	// Scan files and external servers in current dir
-	ScanFilesAndExtServersInDir(server, files, externalServers, serverResources, extServerStatuses)
+	ScanFilesAndExtServersInDir(server, files, externalServers, serverResources, extServerStatuses, fileSizes, smallestTextFileContents)
 
 	StoreInvalidReferences(invalidReferences, serverResources)
 }

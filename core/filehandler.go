@@ -1,22 +1,22 @@
 package core
 
-func FetchFileAttrs(server, resource string) (int, error) {
+func FetchFileAttrs(server, resource string, fileType string) ([]byte, int, error, bool) {
 	conn, err := CreateTCPConnection(server)
 	logRequest(server + resource)
 
 	if err != nil {
-		return 0, FetchErrorResponse(ConnectionError, err, server+resource)
+		return nil, 0, FetchErrorResponse(ConnectionError, err, server+resource), false
 	}
 	defer conn.Close()
 
-	response, responseError := ReadFileFromServerAsBytes(conn, resource)
+	response, responseError, isMalformed := ReadFileFromServerAsBytes(conn, resource, fileType)
 
 	if responseError != nil {
-		return 0, responseError
+		return nil, 0, responseError, isMalformed
 	}
 
 	// Fetch file size
 	fileSize := len(response)
 
-	return fileSize, nil
+	return response, fileSize, nil, isMalformed
 }
