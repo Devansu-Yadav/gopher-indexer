@@ -5,7 +5,7 @@ func FetchFileAttrs(server, resource string) (int, error) {
 	logRequest(server + resource)
 
 	if err != nil {
-		return 0, FetchErrorResponse(ConnectionError, err)
+		return 0, FetchErrorResponse(ConnectionError, err, server+resource)
 	}
 	defer conn.Close()
 

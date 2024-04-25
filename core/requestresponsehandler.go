@@ -37,10 +37,9 @@ func FetchServerResponse(conn net.Conn, resource string) (string, error) {
 		line, err := reader.ReadString('\n')
 		if err != nil {
 			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-				logError(ServerResponseTimeOut, resource)
-				break
+				return "", FetchErrorResponse(ServerResponseTimeOut, err, resource)
 			} else {
-				return "", FetchErrorResponse(ResponseError, err)
+				return "", FetchErrorResponse(ResponseError, err, resource)
 			}
 		}
 
@@ -58,32 +57,11 @@ func FetchResourcesFromDirectory(server, resource string) (string, error) {
 	logRequest(server + resource)
 
 	if err != nil {
-		return "", FetchErrorResponse(ConnectionError, err)
+		return "", FetchErrorResponse(ConnectionError, err, server+resource)
 	}
 	defer conn.Close()
 
 	response, responseErr := FetchServerResponse(conn, resource)
-
-	if responseErr != nil {
-		return "", responseErr
-	}
-	return response, nil
-}
-
-func FetchResourcesFromExternalServer(server string) (string, error) {
-	conn, err := CreateTCPConnectionWithTimeOut(server)
-	logRequest(server)
-
-	if err != nil {
-		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-			logError(ExternalServerConnection, server)
-			return "", nil
-		}
-		return "", FetchErrorResponse(ConnectionError, err)
-	}
-	defer conn.Close()
-
-	response, responseErr := FetchServerResponse(conn, "")
 
 	if responseErr != nil {
 		return "", responseErr
