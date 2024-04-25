@@ -8,13 +8,13 @@ import (
 	"strings"
 )
 
-func ScrapeGopherResponse(serverResourceLink, response string) ([]string, map[string][]string, []string, []string) {
+func ScrapeGopherResponse(serverResourceLink, response string) ([]string, map[string][]string, []string, []string, []string) {
 	if response == "" {
-		return nil, nil, nil, nil
+		return nil, nil, nil, nil, nil
 	}
 
 	reader := bufio.NewReader(strings.NewReader(response))
-	var directories, externalServers, invalidReferences []string
+	var directories, externalServers, invalidReferences, malformedReferences []string
 	files := make(map[string][]string)
 
 	for {
@@ -41,6 +41,7 @@ func ScrapeGopherResponse(serverResourceLink, response string) ([]string, map[st
 
 		// ignore malformed resources
 		if len(parts) < 4 {
+			malformedReferences = append(malformedReferences, parts[1])
 			continue
 		}
 
@@ -58,13 +59,13 @@ func ScrapeGopherResponse(serverResourceLink, response string) ([]string, map[st
 
 		switch itemType {
 		case "0":
-			files["text"] = append(files["text"], resource)
+			files[TextFile] = append(files[TextFile], resource)
 		case "4", "5", "6", "9":
-			files["binary"] = append(files["binary"], resource)
+			files[BinaryFile] = append(files[BinaryFile], resource)
 		}
 	}
 
-	return directories, files, externalServers, invalidReferences
+	return directories, files, externalServers, invalidReferences, malformedReferences
 }
 
 func ScanFilesAndExtServersInDir(server string, files map[string][]string, externalServers []string, serverResources map[string][]string, extServerStatuses map[string]bool, fileSizes map[string][]int, smallestTextFileContents *string) {
@@ -73,12 +74,12 @@ func ScanFilesAndExtServersInDir(server string, files map[string][]string, exter
 			contents, size, err, isMalformed := FetchFileAttrs(server, file, fileType)
 			if err != nil {
 				fmt.Fprintln(os.Stderr, ""+err.Error())
-				serverResources["error"] = append(serverResources["error"], server+file)
+				serverResources[ErrorFile] = append(serverResources[ErrorFile], file)
 				continue
 			}
 
 			if isMalformed {
-				serverResources["error"] = append(serverResources["error"], server+file)
+				serverResources[ErrorFile] = append(serverResources[ErrorFile], file)
 			}
 
 			fmt.Printf("File: %s, Type: %s, Size: %d B\n", file, fileType, size)
@@ -87,7 +88,7 @@ func ScanFilesAndExtServersInDir(server string, files map[string][]string, exter
 			// Update the size of the smallest text/binary file found so far
 			if size < fileSizes[fileType][0] {
 				fileSizes[fileType][0] = size
-				if fileType == "text" {
+				if fileType == TextFile {
 					*smallestTextFileContents = string(contents)
 				}
 			}
@@ -105,7 +106,6 @@ func ScanFilesAndExtServersInDir(server string, files map[string][]string, exter
 		if extServerErr != nil {
 			fmt.Fprintln(os.Stderr, ""+extServerErr.Error())
 			extServerStatuses[extServer] = false
-			serverResources["error"] = append(serverResources["error"], extServer)
 			continue
 		}
 
@@ -117,23 +117,25 @@ func ScanFilesAndExtServersInDir(server string, files map[string][]string, exter
 func StoreInvalidReferences(invalidReferences []string, serverResources map[string][]string) {
 	for _, ref := range invalidReferences {
 		fmt.Fprintln(os.Stderr, ""+FetchErrorResponse(InvalidReference, errors.New(""), ref).Error())
-		serverResources["invalid"] = append(serverResources["invalid"], ref)
+		serverResources[InvalidRef] = append(serverResources[InvalidRef], ref)
 	}
+}
+
+func StoreMalformedReferences(malformedReferences []string, serverResources map[string][]string) {
+	serverResources[ErrorFile] = append(serverResources[ErrorFile], malformedReferences...)
 }
 
 func CrawlGopherServer(server string, initialServerResponse string) {
 	// Scrape the initial response to get the directories, files, and external servers
-	directories, files, externalServers, invalidReferences := ScrapeGopherResponse(server+"/", initialServerResponse)
+	directories, files, externalServers, invalidReferences, malformedReferences := ScrapeGopherResponse(server+"/", initialServerResponse)
 
 	visited := make(map[string]bool)
-	serverResources := map[string][]string{
-		"error": {},
-	}
+	serverResources := make(map[string][]string)
 
 	extServerStatuses := make(map[string]bool)
 	fileSizes := map[string][]int{
-		"text":   {MaxFileSize, 0},
-		"binary": {MaxFileSize, 0},
+		TextFile:   {MaxFileSize, 0},
+		BinaryFile: {MaxFileSize, 0},
 	}
 	smallestTextFileContents := ""
 
@@ -151,6 +153,9 @@ func CrawlGopherServer(server string, initialServerResponse string) {
 	// Handle invalid references
 	StoreInvalidReferences(invalidReferences, serverResources)
 
+	// Handle malformed references
+	StoreMalformedReferences(malformedReferences, serverResources)
+
 	fmt.Println("\n================= Gopher Server stats =======================")
 	fmt.Println("a. No of Gopher directories on server: ", len(visited))
 	fmt.Println("List of directories: ")
@@ -158,28 +163,28 @@ func CrawlGopherServer(server string, initialServerResponse string) {
 		fmt.Println(server + dir)
 	}
 
-	fmt.Println("\nb. Total no of simple text files: ", len(serverResources["text"]))
+	fmt.Println("\nb. Total no of simple text files: ", len(serverResources[TextFile]))
 	fmt.Println("List of simple text files(full path): ")
-	for _, file := range serverResources["text"] {
+	for _, file := range serverResources[TextFile] {
 		fmt.Println(server + file)
 	}
 
-	fmt.Println("\nc. Total no of binary files: ", len(serverResources["binary"]))
+	fmt.Println("\nc. Total no of binary files: ", len(serverResources[BinaryFile]))
 	fmt.Println("List of binary files(full path): ")
-	for _, file := range serverResources["binary"] {
+	for _, file := range serverResources[BinaryFile] {
 		fmt.Println(server + file)
 	}
 
 	fmt.Println("\nd. The contents of the smallest text file:")
 	fmt.Println(smallestTextFileContents)
 
-	fmt.Printf("\ne. Size of the largest text file: %d B", fileSizes["text"][1])
-	fmt.Printf("\nf. Size of the smallest binary file: %d B", fileSizes["binary"][0])
-	fmt.Printf("\nf. Size of the largest binary file: %d B\n", fileSizes["binary"][1])
+	fmt.Printf("\ne. Size of the largest text file: %d B", fileSizes[TextFile][1])
+	fmt.Printf("\nf. Size of the smallest binary file: %d B", fileSizes[BinaryFile][0])
+	fmt.Printf("\nf. Size of the largest binary file: %d B\n", fileSizes[BinaryFile][1])
 
-	fmt.Println("\ng. Total no of unique invalid references: ", len(serverResources["invalid"]))
+	fmt.Println("\ng. Total no of unique invalid references: ", len(serverResources[InvalidRef]))
 	fmt.Println("List of invalid references(full path): ")
-	for _, ref := range serverResources["invalid"] {
+	for _, ref := range serverResources[InvalidRef] {
 		fmt.Println(ref)
 	}
 
@@ -193,8 +198,8 @@ func CrawlGopherServer(server string, initialServerResponse string) {
 	}
 
 	fmt.Println("\ni. List of references with issues/errors(timeout, malformed or large file size): ")
-	for _, errorRef := range serverResources["error"] {
-		fmt.Println(errorRef)
+	for _, errorRef := range serverResources[ErrorFile] {
+		fmt.Println(server + errorRef)
 	}
 }
 
@@ -211,7 +216,7 @@ func ScanDirectories(server, directory string, visited map[string]bool, serverRe
 		fmt.Fprintln(os.Stderr, ""+err.Error()+" for directory: "+directory)
 	}
 
-	directories, files, externalServers, invalidReferences := ScrapeGopherResponse(server+directory, response)
+	directories, files, externalServers, invalidReferences, malformedReferences := ScrapeGopherResponse(server+directory, response)
 	// Recursively scanning current dir
 	for _, dir := range directories {
 		ScanDirectories(server, dir, visited, serverResources, extServerStatuses, fileSizes, smallestTextFileContents)
@@ -220,5 +225,9 @@ func ScanDirectories(server, directory string, visited map[string]bool, serverRe
 	// Scan files and external servers in current dir
 	ScanFilesAndExtServersInDir(server, files, externalServers, serverResources, extServerStatuses, fileSizes, smallestTextFileContents)
 
+	// Handle invalid references
 	StoreInvalidReferences(invalidReferences, serverResources)
+
+	// Handle malformed references
+	StoreMalformedReferences(malformedReferences, serverResources)
 }

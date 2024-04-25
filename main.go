@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 
 	"github.com/Devansu-Yadav/gopher-indexer/core"
@@ -14,7 +13,7 @@ func main() {
 		log.Fatalf("Error: %v", err)
 	}
 
-	fmt.Println(response)
+	// fmt.Println(response)
 
 	// 2. Scan each directory on the server
 	core.CrawlGopherServer(core.GopherServerConnectionString, response)
