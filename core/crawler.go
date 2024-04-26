@@ -80,10 +80,11 @@ func ScanFilesAndExtServersInDir(server string, files map[string][]string, exter
 
 			if isMalformed {
 				serverResources[ErrorFile] = append(serverResources[ErrorFile], file)
+			} else {
+				serverResources[fileType] = append(serverResources[fileType], file)
 			}
 
 			fmt.Printf("File: %s, Type: %s, Size: %d B\n", file, fileType, size)
-			serverResources[fileType] = append(serverResources[fileType], file)
 
 			// Update the size of the smallest text/binary file found so far
 			if size < fileSizes[fileType][0] {
