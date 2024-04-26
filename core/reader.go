@@ -10,10 +10,12 @@ import (
 	"time"
 )
 
-// Reads a file from a server and returns its content as a byte slice.
-// Takes a network connection, resource string, and file type as inputs.
-// Returns the file content as a byte slice, any error(Timeout, FileSizeExceeded or ResponseError)
-// that occurred, and a boolean indicating if the file is malformed.
+/*
+Reads a file from a server and returns its content as a byte slice. Takes a network
+connection, resource string, and file type as inputs.
+Returns the file content as a byte slice, any error(Timeout, FileSizeExceeded or ResponseError)
+that occurred, and a boolean indicating if the file is malformed.
+*/
 func ReadFileFromServerAsBytes(conn net.Conn, resource string, fileType string) ([]byte, error, bool) {
 	fmt.Fprintf(conn, "%s\r\n", resource)
 
