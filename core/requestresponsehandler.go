@@ -52,6 +52,10 @@ func FetchServerResponse(conn net.Conn, resource string) (string, error) {
 	return response, nil
 }
 
+// Connects to the server and fetches resources from a directory.
+// Takes the server address and directory as inputs.
+// Returns the server response as a string and any error(Connection Error/Response Error)
+// that occurred.
 func FetchResourcesFromDirectory(server, resource string) (string, error) {
 	conn, err := CreateTCPConnection(server)
 	logRequest(server + resource)

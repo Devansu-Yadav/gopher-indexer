@@ -8,6 +8,10 @@ import (
 	"strings"
 )
 
+// Scrapes a Gopher server response and categorizes the resources.
+// Takes the server resource link and the server response as inputs.
+// Returns slices of directory paths, a map of file types to file paths,
+// slice of external server addresses, invalid and malformed references.
 func ScrapeGopherResponse(serverResourceLink, response string) ([]string, map[string][]string, []string, []string, []string) {
 	if response == "" {
 		return nil, nil, nil, nil, nil
@@ -68,6 +72,12 @@ func ScrapeGopherResponse(serverResourceLink, response string) ([]string, map[st
 	return directories, files, externalServers, invalidReferences, malformedReferences
 }
 
+// Scans files and external servers in a directory.
+// Takes the server address, a map of file types to file paths, a slice of
+// external server addresses, a map of server resources, a map of external server statuses,
+// a map of file sizes, and a pointer to the smallest text file contents as inputs.
+// Fetches each file's attributes and updates the server resources and file sizes accordingly.
+// Connects to each external server and updates the external server statuses.
 func ScanFilesAndExtServersInDir(server string, files map[string][]string, externalServers []string, serverResources map[string][]string, extServerStatuses map[string]bool, fileSizes map[string][]int, smallestTextFileContents *string) {
 	for fileType, fileList := range files {
 		for _, file := range fileList {
@@ -204,6 +214,12 @@ func CrawlGopherServer(server string, initialServerResponse string) {
 	}
 }
 
+// Recursively scans a directory on a server and categorizes them into directories,
+// files, external servers, invalid references, and malformed references.
+// Takes the server address, directory path, a map of visited directories,
+// a map of server resources, a map of external server statuses, a map of file sizes,
+// and a pointer to the smallest text file contents as inputs.
+// It also stores the invalid and malformed references in the server resources.
 func ScanDirectories(server, directory string, visited map[string]bool, serverResources map[string][]string, extServerStatuses map[string]bool, fileSizes map[string][]int, smallestTextFileContents *string) {
 	if visited[directory] {
 		return
