@@ -40,7 +40,7 @@ func ReadFileFromServerAsBytes(conn net.Conn, resource string, fileType string) 
 		}
 	}
 
-	if fileType == "text" {
+	if fileType == TextFile {
 		responseStr := string(response)
 
 		// Check if the file is properly terminated
